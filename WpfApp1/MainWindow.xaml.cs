@@ -197,8 +197,11 @@ namespace AnimeScrollApp
                 var coverObj = media["coverImage"];
                 string imageUrl = coverObj?["extraLarge"]?.ToString() ?? coverObj?["large"]?.ToString();
 
-                string score = media["averageScore"]?.ToString() ?? "N/A";
-                string episodes = media["episodes"]?.ToString() ?? "N/A";
+                string score = media["averageScore"] != null && media["averageScore"].Type != JTokenType.Null ? media["averageScore"].ToString() : "N/A";
+                string episodes = media["episodes"] != null && media["episodes"].Type != JTokenType.Null ? media["episodes"].ToString() : "N/A";
+                int currentEp = media["nextAiringEpisode"] != null
+    ? (int)media["nextAiringEpisode"]["episode"] - 1
+    : (media["episodes"] != null ? (int)media["episodes"] : 0);
                 string description = media["description"]?.ToString() ?? "";
                 string season = media["season"]?.ToString() ?? "";
                 string year = media["seasonYear"]?.ToString() ?? "";
@@ -300,6 +303,7 @@ namespace AnimeScrollApp
                 {
                     Text = displayTitle,
                     FontSize = 28,
+                    Width = 390,
                     FontWeight = FontWeights.Bold,
                     Foreground = Brushes.White,
                     TextWrapping = TextWrapping.Wrap,
@@ -307,15 +311,25 @@ namespace AnimeScrollApp
                     Effect = new DropShadowEffect { Color = Colors.Black, ShadowDepth = 2 }
                 };
 
-                // Ajuster la taille du titre si trop long
-                if (displayTitle.Length > 50)
+                // On mesure le TextBlock pour savoir combien de lignes il prend
+                titleBlock.Measure(new Size(titleBlock.Width, double.PositiveInfinity));
+                double lineHeight = titleBlock.FontSize * 1.2; // approximation du line height
+                int lines = (int)Math.Ceiling(titleBlock.DesiredSize.Height / lineHeight);
+
+                if (lines > 3)
                 {
-                    titleBlock.FontSize = 22;
+                    titleBlock.FontSize = 16;
                     titleBlock.MaxHeight = 70; // Limite à environ 3 lignes
                 }
-                else if (displayTitle.Length > 35)
+                else if (lines > 2)
+                {
+                    titleBlock.FontSize = 20;
+                    titleBlock.MaxHeight = 70; // Limite à environ 3 lignes
+                }
+                else if (lines > 1)
                 {
                     titleBlock.FontSize = 24;
+                    titleBlock.MaxHeight = 70;
                 }
 
                 infoPanel.Children.Add(titleBlock);
@@ -337,14 +351,28 @@ namespace AnimeScrollApp
                 }
 
                 // Stats (Score / Ep)
-                StackPanel statsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+                StackPanel statsPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 15) };
 
                 Border scoreBadge = new Border { Background = new SolidColorBrush(Color.FromRgb(255, 215, 0)), CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 10, 0) };
                 scoreBadge.Child = new TextBlock { Text = "★ " + score, FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.Black };
                 statsPanel.Children.Add(scoreBadge);
 
+                string epDisplay;
+                if (status == "RELEASING")
+                {
+                    if (media["episodes"] != null)
+                        epDisplay = $"{currentEp}/{media["episodes"]}";
+                    else
+                        epDisplay = $"{currentEp}+";
+                }
+                else // finished or not yet released
+                {
+                    epDisplay = $"{currentEp}/{media["episodes"] ?? "N/A"}";
+                }
+
+
                 Border epBadge = new Border { Background = new SolidColorBrush(Color.FromRgb(15, 52, 96)), CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 5, 10, 5) };
-                epBadge.Child = new TextBlock { Text = "📺 " + episodes + " EP", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
+                epBadge.Child = new TextBlock { Text = "📺 " + epDisplay + " EP", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White };
                 statsPanel.Children.Add(epBadge);
 
                 infoPanel.Children.Add(statsPanel);
@@ -433,19 +461,79 @@ namespace AnimeScrollApp
                     PanningMode = PanningMode.VerticalOnly
                 };
 
-                // Gestion du Drag sur le texte
+                // Gestion du Drag sur le texte avec détection de scroll continu
                 Point startPoint = new Point();
                 bool scrolling = false;
-                descScrollViewer.PreviewMouseLeftButtonDown += (s, e) => { startPoint = e.GetPosition(descScrollViewer); scrolling = true; descScrollViewer.CaptureMouse(); };
+                double accumulatedDelta = 0; // Pour détecter le scroll continu
+
+                descScrollViewer.PreviewMouseLeftButtonDown += (s, e) => {
+                    startPoint = e.GetPosition(descScrollViewer);
+                    scrolling = true;
+                    accumulatedDelta = 0;
+                    descScrollViewer.CaptureMouse();
+                };
+
                 descScrollViewer.PreviewMouseMove += (s, e) => {
                     if (scrolling)
                     {
                         double delta = startPoint.Y - e.GetPosition(descScrollViewer).Y;
-                        descScrollViewer.ScrollToVerticalOffset(descScrollViewer.VerticalOffset + delta);
+                        double currentOffset = descScrollViewer.VerticalOffset;
+                        double maxOffset = descScrollViewer.ScrollableHeight;
+
+                        // Si on est en haut et qu'on scroll vers le haut
+                        if (currentOffset <= 0 && delta < 0)
+                        {
+                            accumulatedDelta += delta;
+                            if (Math.Abs(accumulatedDelta) > 30) // Seuil pour déclencher le scroll d'anime
+                            {
+                                scrolling = false;
+                                descScrollViewer.ReleaseMouseCapture();
+                                // Déclencher scroll anime précédent
+                                if (scrollCounter > 0)
+                                {
+                                    scrollCounter--;
+                                    ScrollToOffsetSmooth(scrollCounter * windowHeight);
+                                }
+                            }
+                        }
+                        // Si on est en bas et qu'on scroll vers le bas
+                        else if (currentOffset >= maxOffset && delta > 0)
+                        {
+                            accumulatedDelta += delta;
+                            if (accumulatedDelta > 30) // Seuil pour déclencher le scroll d'anime
+                            {
+                                scrolling = false;
+                                descScrollViewer.ReleaseMouseCapture();
+                                // Déclencher scroll anime suivant
+                                if (scrollCounter < animeCount - 1)
+                                {
+                                    scrollCounter++;
+                                    ScrollToOffsetSmooth(scrollCounter * windowHeight);
+                                }
+                                else if (canLoadMore && !isLoading)
+                                {
+                                    scrollCounter++;
+                                    _ = LoadAnimesAsync(5, true);
+                                    ScrollToOffsetSmooth(scrollCounter * windowHeight);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Scroll normal dans la description
+                            accumulatedDelta = 0;
+                            descScrollViewer.ScrollToVerticalOffset(descScrollViewer.VerticalOffset + delta);
+                        }
+
                         startPoint = e.GetPosition(descScrollViewer);
                     }
                 };
-                descScrollViewer.PreviewMouseLeftButtonUp += (s, e) => { scrolling = false; descScrollViewer.ReleaseMouseCapture(); };
+
+                descScrollViewer.PreviewMouseLeftButtonUp += (s, e) => {
+                    scrolling = false;
+                    accumulatedDelta = 0;
+                    descScrollViewer.ReleaseMouseCapture();
+                };
 
                 // Contenu complet + Voir Moins
                 StackPanel scrollContent = new StackPanel();
@@ -541,7 +629,7 @@ namespace AnimeScrollApp
             double targetTitleSize = titleBlock.Text.Length > 50 ? 16 : (titleBlock.Text.Length > 35 ? 18 : 20);
             titleBlock.BeginAnimation(TextBlock.FontSizeProperty, new DoubleAnimation(titleBlock.FontSize, targetTitleSize, duration) { EasingFunction = easing });
             titleBlock.BeginAnimation(TextBlock.MarginProperty, new ThicknessAnimation(titleBlock.Margin, new Thickness(0, 0, 0, 5), duration) { EasingFunction = easing });
-            statsPanel.BeginAnimation(StackPanel.MarginProperty, new ThicknessAnimation(statsPanel.Margin, new Thickness(0, 0, 0, 5), duration) { EasingFunction = easing });
+            statsPanel.BeginAnimation(StackPanel.MarginProperty, new ThicknessAnimation(statsPanel.Margin, new Thickness(0, 0, 0, 15), duration) { EasingFunction = easing });
 
             // Texte
             descBlockShort.BeginAnimation(TextBlock.OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200)));
@@ -581,7 +669,7 @@ namespace AnimeScrollApp
                 double originalTitleSize = titleBlock.Text.Length > 50 ? 22 : (titleBlock.Text.Length > 35 ? 24 : 28);
                 titleBlock.BeginAnimation(TextBlock.FontSizeProperty, new DoubleAnimation(titleBlock.FontSize, originalTitleSize, duration) { EasingFunction = easing });
                 titleBlock.BeginAnimation(TextBlock.MarginProperty, new ThicknessAnimation(titleBlock.Margin, new Thickness(0, 0, 0, 10), duration) { EasingFunction = easing });
-                statsPanel.BeginAnimation(StackPanel.MarginProperty, new ThicknessAnimation(statsPanel.Margin, new Thickness(0, 0, 0, 10), duration) { EasingFunction = easing });
+                statsPanel.BeginAnimation(StackPanel.MarginProperty, new ThicknessAnimation(statsPanel.Margin, new Thickness(0, 0, 0, 15), duration) { EasingFunction = easing });
 
                 StackPanel p = (StackPanel)descScrollViewer.Parent;
                 TextBlock btn = p.Children.OfType<TextBlock>().FirstOrDefault(x => x.Text == "Read More");
@@ -601,7 +689,22 @@ namespace AnimeScrollApp
             else if (status == "NOT_YET_RELEASED") { c = Color.FromRgb(230, 0, 0); g = Color.FromRgb(255, 0, 0); }
             else return null;
 
-            Ellipse e = new Ellipse { Width = 10, Height = 10, Fill = new SolidColorBrush(c), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Effect = new DropShadowEffect { Color = g, BlurRadius = 8, Opacity = 1 } };
+            Ellipse e = new Ellipse
+            {
+                Width = 10,
+                Height = 10,
+                Fill = new SolidColorBrush(c),
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Effect = new DropShadowEffect
+                {
+                    Color = g,
+                    BlurRadius = 8,
+                    Opacity = 1,
+                    ShadowDepth = 0,
+                    Direction = 0
+                }
+            };
             DoubleAnimation a = new DoubleAnimation { From = 0.5, To = 1.0, Duration = TimeSpan.FromSeconds(1), AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever };
             e.Effect.BeginAnimation(DropShadowEffect.OpacityProperty, a);
             return e;
