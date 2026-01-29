@@ -306,21 +306,17 @@ namespace AnimeScrollApp
                 contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
                 contentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-                // --- MODIFICATION ICI : IMAGE PRINCIPALE AVEC COINS ARRONDIS ---
-
-                // 1. Préparer l'image
                 BitmapImage mainBitmap = new BitmapImage();
                 mainBitmap.BeginInit();
                 mainBitmap.UriSource = new Uri(imageUrl);
                 mainBitmap.CacheOption = BitmapCacheOption.OnLoad;
                 mainBitmap.EndInit();
 
-                // 2. Créer la Border
                 Border imageCard = new Border
                 {
                     Width = 280,
                     Height = 400,
-                    CornerRadius = new CornerRadius(15), // Ceci fonctionne car on utilise Background
+                    CornerRadius = new CornerRadius(8),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Effect = new DropShadowEffect
@@ -331,7 +327,6 @@ namespace AnimeScrollApp
                         BlurRadius = 20,
                         Opacity = 0.8
                     },
-                    // 3. Utiliser ImageBrush pour le fond
                     Background = new ImageBrush
                     {
                         ImageSource = mainBitmap,
@@ -339,11 +334,9 @@ namespace AnimeScrollApp
                     }
                 };
 
-                // On ajoute la carte directement à la grid
                 Grid.SetRow(imageCard, 0);
                 contentGrid.Children.Add(imageCard);
 
-                // --- FIN DE LA MODIFICATION ---
 
                 StackPanel infoPanel = new StackPanel
                 {
