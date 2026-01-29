@@ -41,7 +41,7 @@ namespace AnimeScrollApp
 
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            // Permettre de déplacer la fenêtre seulement si on ne clique pas sur le contenu
+            // Permettre de déplacer la fenêtre seulement si on ne clique pas sur le contenu interactif
             if (e.OriginalSource is Grid || e.OriginalSource is Border)
             {
                 if (!isDragging)
@@ -97,7 +97,6 @@ namespace AnimeScrollApp
             try
             {
                 int randomPage = random.Next(1, 80);
-
                 int rand = random.Next(0, 100);
                 string mediaFilter;
 
@@ -160,10 +159,6 @@ namespace AnimeScrollApp
         )";
                 }
 
-
-
-
-
                 var query = $@"
                 query ($page: Int) {{
                     Page(page: $page, perPage: 1) {{
@@ -188,9 +183,6 @@ namespace AnimeScrollApp
                         }}
                     }}
                 }}";
-
-                // Pour charger uniquement les animes RELEASING ou NOT_YET_RELEASED, utiliser :
-                // mediaFilter = "media(type: ANIME, sort: POPULARITY_DESC, status_in: [RELEASING, NOT_YET_RELEASED])";
 
                 var request = new
                 {
@@ -275,6 +267,7 @@ namespace AnimeScrollApp
                     Background = Brushes.Black
                 };
 
+                // --- IMAGE DE FOND FLOUTÉE ---
                 Image bgImage = new Image
                 {
                     Stretch = Stretch.UniformToFill,
@@ -293,6 +286,7 @@ namespace AnimeScrollApp
 
                 fullScreenCard.Children.Add(bgImage);
 
+                // --- OVERLAY DÉGRADÉ ---
                 Border gradientOverlay = new Border
                 {
                     Background = new LinearGradientBrush
@@ -312,12 +306,21 @@ namespace AnimeScrollApp
                 contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
                 contentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-                Border imageBorder = new Border
+                // --- MODIFICATION ICI : IMAGE PRINCIPALE AVEC COINS ARRONDIS ---
+
+                // 1. Préparer l'image
+                BitmapImage mainBitmap = new BitmapImage();
+                mainBitmap.BeginInit();
+                mainBitmap.UriSource = new Uri(imageUrl);
+                mainBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                mainBitmap.EndInit();
+
+                // 2. Créer la Border
+                Border imageCard = new Border
                 {
                     Width = 280,
                     Height = 400,
-                    CornerRadius = new CornerRadius(15),
-                    ClipToBounds = true,
+                    CornerRadius = new CornerRadius(15), // Ceci fonctionne car on utilise Background
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Effect = new DropShadowEffect
@@ -327,24 +330,20 @@ namespace AnimeScrollApp
                         ShadowDepth = 10,
                         BlurRadius = 20,
                         Opacity = 0.8
+                    },
+                    // 3. Utiliser ImageBrush pour le fond
+                    Background = new ImageBrush
+                    {
+                        ImageSource = mainBitmap,
+                        Stretch = Stretch.UniformToFill
                     }
                 };
 
-                Image mainImage = new Image
-                {
-                    Stretch = Stretch.UniformToFill,
-                };
+                // On ajoute la carte directement à la grid
+                Grid.SetRow(imageCard, 0);
+                contentGrid.Children.Add(imageCard);
 
-                BitmapImage mainBitmap = new BitmapImage();
-                mainBitmap.BeginInit();
-                mainBitmap.UriSource = new Uri(imageUrl);
-                mainBitmap.CacheOption = BitmapCacheOption.OnLoad;
-                mainBitmap.EndInit();
-                mainImage.Source = mainBitmap;
-
-                imageBorder.Child = mainImage;
-                Grid.SetRow(imageBorder, 0);
-                contentGrid.Children.Add(imageBorder);
+                // --- FIN DE LA MODIFICATION ---
 
                 StackPanel infoPanel = new StackPanel
                 {
@@ -378,7 +377,6 @@ namespace AnimeScrollApp
                         Margin = new Thickness(0, 0, 0, 5)
                     };
 
-                    // Pastille de statut avec effet brillant (seulement pour RELEASING et NOT_YET_RELEASED)
                     if (!string.IsNullOrEmpty(status))
                     {
                         Ellipse statusDot = CreateStatusIndicator(status);
@@ -429,7 +427,6 @@ namespace AnimeScrollApp
 
                 TextBlock scoreText = new TextBlock
                 {
-                    
                     Text = "★ " + score,
                     FontSize = 14,
                     FontWeight = FontWeights.Bold,
@@ -487,7 +484,6 @@ namespace AnimeScrollApp
             Color dotColor;
             Color glowColor;
 
-            // Déterminer la couleur selon le statut (seulement RELEASING et NOT_YET_RELEASED)
             switch (status.ToUpper())
             {
                 case "RELEASING":
@@ -499,7 +495,6 @@ namespace AnimeScrollApp
                     glowColor = Color.FromRgb(255, 0, 0);
                     break;
                 default:
-                    // Ne pas afficher d'ellipse pour les autres statuts
                     return null;
             }
 
@@ -520,7 +515,6 @@ namespace AnimeScrollApp
                 }
             };
 
-            // Animation de brillance
             DoubleAnimation glowAnimation = new DoubleAnimation
             {
                 From = 0.5,
@@ -547,7 +541,6 @@ namespace AnimeScrollApp
 
         private void ScrollToOffsetSmooth(double offset)
         {
-            // Animation fluide
             DoubleAnimation animation = new DoubleAnimation
             {
                 From = MainScrollViewer.VerticalOffset,
@@ -564,11 +557,9 @@ namespace AnimeScrollApp
 
             storyboard.Begin();
 
-            // Charger plus d'animes si on approche de la fin (style Instagram)
-            // Si on est proche de la fin et qu'on peut charger, on charge en arrière-plan
             if (canLoadMore && animeCount - scrollCounter <= 3 && animeCount - scrollCounter > 0)
             {
-                _ = LoadAnimesAsync(3, false); // Chargement discret en arrière-plan
+                _ = LoadAnimesAsync(3, false);
             }
         }
 
@@ -580,10 +571,8 @@ namespace AnimeScrollApp
                 double delta = scrollStartPos - currentPos;
                 double newOffset = scrollCounter * windowHeight + delta;
 
-                // Limiter le scroll pour ne pas aller en négatif
                 newOffset = Math.Max(0, newOffset);
 
-                // Limiter le scroll pour ne pas dépasser le contenu disponible
                 double maxOffset = Math.Max(0, (animeCount - 1) * windowHeight);
                 newOffset = Math.Min(newOffset, maxOffset);
 
@@ -611,38 +600,29 @@ namespace AnimeScrollApp
 
             int previousScrollCounter = scrollCounter;
 
-            // Déterminer la direction et si on doit changer de carte
             if (scrollRatio >= 0.5)
             {
-                // Scroll vers le bas - vérifier qu'il y a du contenu disponible
                 if (scrollCounter < animeCount - 1)
                 {
-                    // Il y a encore des animes chargés à afficher
                     scrollCounter++;
                 }
                 else if (scrollCounter == animeCount - 1 && canLoadMore && !isLoading)
                 {
-                    // On est à la toute fin, essayer de charger plus avec indicateur visible
                     scrollCounter++;
-                    _ = LoadAnimesAsync(5, true); // Afficher le loading (style Instagram)
+                    _ = LoadAnimesAsync(5, true);
                 }
-                // Sinon on ne fait rien - on reste sur la dernière carte disponible
             }
             else if (scrollRatio <= -0.5)
             {
-                // Scroll vers le haut
                 scrollCounter = Math.Max(0, scrollCounter - 1);
             }
 
-            // Limiter scrollCounter au maximum disponible
             scrollCounter = Math.Min(scrollCounter, Math.Max(0, animeCount - 1));
 
-            // Animer vers la position finale
             ScrollToOffsetSmooth(scrollCounter * windowHeight);
         }
     }
 
-    // Helper class pour animer le ScrollViewer
     public static class ScrollViewerBehavior
     {
         public static readonly DependencyProperty VerticalOffsetProperty =
