@@ -26,17 +26,35 @@ namespace AnimeScrollApp
         private float scrollStartPos = 0;
         private bool isDragging = false;
         private bool canLoadMore = true;
+        private bool isLoadingAreaVisible = false;
+        
+        // Couleur d'accent pour l'identité visuelle
+        private static readonly Color AccentColor = Color.FromRgb(0xE9, 0x45, 0x60);
 
         public MainWindow()
         {
             InitializeComponent();
             windowHeight = this.Height;
 
+            // Centrer la fenêtre sur l'écran
+            this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            
             // Rendre la fenêtre déplaçable
             this.MouseLeftButtonDown += Window_MouseLeftButtonDown;
 
+            // Désactiver le scrolling au clavier
+            MainScrollViewer.PreviewKeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Up || e.Key == Key.Down || 
+                    e.Key == Key.PageUp || e.Key == Key.PageDown ||
+                    e.Key == Key.Home || e.Key == Key.End)
+                {
+                    e.Handled = true;
+                }
+            };
+
             // Charger les premiers animes en arrière-plan (sans indicateur)
-            _ = LoadAnimesAsync(5, false);
+            _ = LoadAnimesAsync(8, false);
         }
 
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -58,15 +76,13 @@ namespace AnimeScrollApp
             isLoading = true;
             canLoadMore = false;
 
-            // Afficher l'indicateur de chargement seulement si demandé (style Instagram)
-            if (showLoading)
+            // Afficher l'indicateur de chargement dans la zone de chargement
+            if (showLoading && LoadingArea != null)
             {
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    if (LoadingIndicator != null)
-                    {
-                        LoadingIndicator.Visibility = Visibility.Visible;
-                    }
+                    LoadingArea.Visibility = Visibility.Visible;
+                    isLoadingAreaVisible = true;
                 });
             }
 
@@ -79,12 +95,26 @@ namespace AnimeScrollApp
 
             await Task.WhenAll(tasks);
 
-            // Cacher l'indicateur de chargement
+            // Attendre un peu pour que l'utilisateur voie le message de chargement
+            if (showLoading)
+            {
+                await Task.Delay(500);
+            }
+
+            // Cacher l'indicateur de chargement et revenir à la position normale
             await Dispatcher.InvokeAsync(() =>
             {
-                if (LoadingIndicator != null)
+                if (LoadingArea != null)
                 {
-                    LoadingIndicator.Visibility = Visibility.Collapsed;
+                    LoadingArea.Visibility = Visibility.Collapsed;
+                    isLoadingAreaVisible = false;
+                }
+                
+                // Revenir au dernier anime chargé
+                if (showLoading && scrollCounter >= animeCount - 1)
+                {
+                    scrollCounter = Math.Max(0, animeCount - 1);
+                    ScrollToOffsetSmooth(scrollCounter * windowHeight);
                 }
             });
 
@@ -242,10 +272,8 @@ namespace AnimeScrollApp
                 string status = media["status"]?.ToString() ?? "";
 
                 description = System.Text.RegularExpressions.Regex.Replace(description, "<.*?>", string.Empty);
-                if (description.Length > 200)
-                {
-                    description = description.Substring(0, 200) + "...";
-                }
+                string fullDescription = description;
+                string shortDescription = description.Length > 200 ? description.Substring(0, 200) + "..." : description;
 
                 string genres = "";
                 var genresArray = media["genres"];
@@ -314,6 +342,7 @@ namespace AnimeScrollApp
 
                 Border imageCard = new Border
                 {
+                    Name = "ImageCard",
                     Width = 280,
                     Height = 400,
                     CornerRadius = new CornerRadius(8),
@@ -331,7 +360,28 @@ namespace AnimeScrollApp
                     {
                         ImageSource = mainBitmap,
                         Stretch = Stretch.UniformToFill
-                    }
+                    },
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                    RenderTransform = new ScaleTransform(1, 1)
+                };
+
+                // Animation au hover sur l'image
+                imageCard.MouseEnter += (s, e) =>
+                {
+                    ScaleTransform scale = imageCard.RenderTransform as ScaleTransform;
+                    DoubleAnimation scaleUpX = new DoubleAnimation(1.05, TimeSpan.FromMilliseconds(200));
+                    DoubleAnimation scaleUpY = new DoubleAnimation(1.05, TimeSpan.FromMilliseconds(200));
+                    scale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleUpX);
+                    scale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleUpY);
+                };
+
+                imageCard.MouseLeave += (s, e) =>
+                {
+                    ScaleTransform scale = imageCard.RenderTransform as ScaleTransform;
+                    DoubleAnimation scaleDownX = new DoubleAnimation(1, TimeSpan.FromMilliseconds(200));
+                    DoubleAnimation scaleDownY = new DoubleAnimation(1, TimeSpan.FromMilliseconds(200));
+                    scale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleDownX);
+                    scale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleDownY);
                 };
 
                 Grid.SetRow(imageCard, 0);
@@ -340,12 +390,14 @@ namespace AnimeScrollApp
 
                 StackPanel infoPanel = new StackPanel
                 {
+                    Name = "InfoPanel",
                     Margin = new Thickness(20, 0, 20, 30),
                     VerticalAlignment = VerticalAlignment.Bottom
                 };
 
                 TextBlock titleBlock = new TextBlock
                 {
+                    Name = "TitleBlock",
                     Text = displayTitle,
                     FontSize = 28,
                     FontWeight = FontWeights.Bold,
@@ -366,6 +418,7 @@ namespace AnimeScrollApp
                 {
                     StackPanel seasonPanel = new StackPanel
                     {
+                        Name = "SeasonPanel",
                         Orientation = Orientation.Horizontal,
                         Margin = new Thickness(0, 0, 0, 5)
                     };
@@ -395,9 +448,10 @@ namespace AnimeScrollApp
                 {
                     TextBlock genresBlock = new TextBlock
                     {
+                        Name = "GenresBlock",
                         Text = genres,
                         FontSize = 14,
-                        Foreground = new SolidColorBrush(Color.FromRgb(233, 69, 96)),
+                        Foreground = new SolidColorBrush(AccentColor),
                         Margin = new Thickness(0, 0, 0, 10),
                         FontWeight = FontWeights.SemiBold
                     };
@@ -406,6 +460,7 @@ namespace AnimeScrollApp
 
                 StackPanel statsPanel = new StackPanel
                 {
+                    Name = "StatsPanel",
                     Orientation = Orientation.Horizontal,
                     Margin = new Thickness(0, 0, 0, 10)
                 };
@@ -449,15 +504,99 @@ namespace AnimeScrollApp
 
                 if (!string.IsNullOrEmpty(description))
                 {
-                    TextBlock descBlock = new TextBlock
+                    // Calculer la hauteur max pour la description (basée sur la hauteur de fenêtre)
+                    double maxDescriptionHeight = 150;
+                    bool needsScroll = description.Length > 300;
+                    
+                    Border descriptionBorder = new Border
                     {
-                        Text = description,
-                        FontSize = 14,
-                        Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                        TextWrapping = TextWrapping.Wrap,
-                        LineHeight = 20
+                        Name = "DescriptionBorder"
                     };
-                    infoPanel.Children.Add(descBlock);
+                    
+                    if (needsScroll)
+                    {
+                        ScrollViewer descScrollViewer = new ScrollViewer
+                        {
+                            MaxHeight = maxDescriptionHeight,
+                            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                            Padding = new Thickness(0, 0, 5, 0)
+                        };
+
+                        TextBlock descBlock = new TextBlock
+                        {
+                            Name = "DescriptionBlock",
+                            Text = shortDescription,
+                            FontSize = 14,
+                            Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+                            TextWrapping = TextWrapping.Wrap,
+                            LineHeight = 20,
+                            Tag = new { Short = shortDescription, Full = fullDescription, IsExpanded = false, ScrollViewer = descScrollViewer }
+                        };
+
+                        descScrollViewer.Content = descBlock;
+                        descriptionBorder.Child = descScrollViewer;
+                    }
+                    else
+                    {
+                        TextBlock descBlock = new TextBlock
+                        {
+                            Name = "DescriptionBlock",
+                            Text = shortDescription,
+                            FontSize = 14,
+                            Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+                            TextWrapping = TextWrapping.Wrap,
+                            LineHeight = 20,
+                            Tag = new { Short = shortDescription, Full = fullDescription, IsExpanded = false, ScrollViewer = (ScrollViewer)null }
+                        };
+                        descriptionBorder.Child = descBlock;
+                    }
+
+                    infoPanel.Children.Add(descriptionBorder);
+
+                    // Ajouter le bouton "voir plus" si la description est tronquée
+                    if (description.Length > 200)
+                    {
+                        TextBlock expandButton = new TextBlock
+                        {
+                            Text = "Voir plus...",
+                            FontSize = 14,
+                            Foreground = new SolidColorBrush(AccentColor),
+                            Margin = new Thickness(0, 5, 0, 0),
+                            Cursor = Cursors.Hand,
+                            FontWeight = FontWeights.SemiBold,
+                            HorizontalAlignment = HorizontalAlignment.Left
+                        };
+
+                        expandButton.MouseLeftButtonDown += (s, e) =>
+                        {
+                            e.Handled = true;
+                            
+                            // Trouver le TextBlock de description
+                            TextBlock descBlock = FindDescriptionBlock(descriptionBorder);
+                            if (descBlock == null) return;
+
+                            var tag = (dynamic)descBlock.Tag;
+                            bool isExpanded = tag.IsExpanded;
+
+                            if (!isExpanded)
+                            {
+                                // Expand
+                                AnimateDescriptionExpansion(contentGrid, imageCard, infoPanel, titleBlock, descBlock, expandButton, fullDescription, needsScroll, maxDescriptionHeight);
+                                descBlock.Tag = new { Short = shortDescription, Full = fullDescription, IsExpanded = true, ScrollViewer = tag.ScrollViewer };
+                                expandButton.Text = "Voir moins";
+                            }
+                            else
+                            {
+                                // Collapse
+                                AnimateDescriptionCollapse(contentGrid, imageCard, infoPanel, titleBlock, descBlock, expandButton, shortDescription);
+                                descBlock.Tag = new { Short = shortDescription, Full = fullDescription, IsExpanded = false, ScrollViewer = tag.ScrollViewer };
+                                expandButton.Text = "Voir plus...";
+                            }
+                        };
+
+                        infoPanel.Children.Add(expandButton);
+                    }
                 }
 
                 Grid.SetRow(infoPanel, 1);
@@ -469,6 +608,101 @@ namespace AnimeScrollApp
             catch (Exception)
             {
                 // Ignorer
+            }
+        }
+
+        private TextBlock FindDescriptionBlock(Border descriptionBorder)
+        {
+            if (descriptionBorder.Child is TextBlock tb)
+                return tb;
+            if (descriptionBorder.Child is ScrollViewer sv && sv.Content is TextBlock tb2)
+                return tb2;
+            return null;
+        }
+
+        private void AnimateDescriptionExpansion(Grid contentGrid, Border imageCard, StackPanel infoPanel, 
+            TextBlock titleBlock, TextBlock descBlock, TextBlock expandButton, string fullDescription, 
+            bool needsScroll, double maxScrollHeight)
+        {
+            // Calculer les nouvelles tailles en fonction de la longueur de la description
+            double descriptionLength = fullDescription.Length;
+            double imageTargetHeight = Math.Max(200, 400 - (descriptionLength / 8)); // Min 200, max 400
+            double imageTargetWidth = imageTargetHeight * 0.7; // Ratio d'aspect
+            double titleTargetSize = Math.Max(18, 28 - (descriptionLength / 100)); // Min 18, max 28
+
+            // Réduire l'image proportionnellement
+            DoubleAnimation imageShrink = new DoubleAnimation(imageTargetWidth, TimeSpan.FromMilliseconds(300))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            imageCard.BeginAnimation(Border.WidthProperty, imageShrink);
+
+            DoubleAnimation imageHeightShrink = new DoubleAnimation(imageTargetHeight, TimeSpan.FromMilliseconds(300))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            imageCard.BeginAnimation(Border.HeightProperty, imageHeightShrink);
+
+            // Déplacer l'image vers le haut
+            imageCard.VerticalAlignment = VerticalAlignment.Top;
+            imageCard.Margin = new Thickness(0, 20, 0, 0);
+
+            // Réduire la taille du titre
+            DoubleAnimation titleShrink = new DoubleAnimation(titleTargetSize, TimeSpan.FromMilliseconds(300))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            titleBlock.BeginAnimation(TextBlock.FontSizeProperty, titleShrink);
+
+            // Afficher la description complète
+            descBlock.Text = fullDescription;
+            
+            // Si on a un ScrollViewer, s'assurer qu'il est configuré correctement
+            var tag = (dynamic)descBlock.Tag;
+            if (tag.ScrollViewer != null)
+            {
+                ScrollViewer sv = tag.ScrollViewer;
+                sv.MaxHeight = maxScrollHeight;
+                sv.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            }
+        }
+
+        private void AnimateDescriptionCollapse(Grid contentGrid, Border imageCard, StackPanel infoPanel, 
+            TextBlock titleBlock, TextBlock descBlock, TextBlock expandButton, string shortDescription)
+        {
+            // Restaurer l'image
+            DoubleAnimation imageGrow = new DoubleAnimation(280, TimeSpan.FromMilliseconds(300))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            imageCard.BeginAnimation(Border.WidthProperty, imageGrow);
+
+            DoubleAnimation imageHeightGrow = new DoubleAnimation(400, TimeSpan.FromMilliseconds(300))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            imageCard.BeginAnimation(Border.HeightProperty, imageHeightGrow);
+
+            // Recentrer l'image
+            imageCard.VerticalAlignment = VerticalAlignment.Center;
+            imageCard.Margin = new Thickness(0);
+
+            // Restaurer la taille du titre
+            DoubleAnimation titleGrow = new DoubleAnimation(28, TimeSpan.FromMilliseconds(300))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            titleBlock.BeginAnimation(TextBlock.FontSizeProperty, titleGrow);
+
+            // Afficher la description courte
+            descBlock.Text = shortDescription;
+            
+            // Si on a un ScrollViewer, réinitialiser le scroll
+            var tag = (dynamic)descBlock.Tag;
+            if (tag.ScrollViewer != null)
+            {
+                ScrollViewer sv = tag.ScrollViewer;
+                sv.ScrollToTop();
             }
         }
 
@@ -550,9 +784,10 @@ namespace AnimeScrollApp
 
             storyboard.Begin();
 
-            if (canLoadMore && animeCount - scrollCounter <= 3 && animeCount - scrollCounter > 0)
+            // Précharger plus intelligemment : charger quand il reste 5 animes ou moins
+            if (canLoadMore && !isLoading && animeCount - scrollCounter <= 5)
             {
-                _ = LoadAnimesAsync(3, false);
+                _ = LoadAnimesAsync(8, false);
             }
         }
 
@@ -566,8 +801,27 @@ namespace AnimeScrollApp
 
                 newOffset = Math.Max(0, newOffset);
 
+                // Permettre de scroll un peu au-delà pour voir la zone de chargement
                 double maxOffset = Math.Max(0, (animeCount - 1) * windowHeight);
-                newOffset = Math.Min(newOffset, maxOffset);
+                
+                // Si on est au dernier anime et qu'on peut charger plus
+                if (scrollCounter >= animeCount - 1 && canLoadMore && !isLoading)
+                {
+                    // Permettre de scroll jusqu'à 200px de plus pour révéler la zone de chargement
+                    double extraScroll = Math.Min(200, Math.Max(0, delta));
+                    newOffset = maxOffset + extraScroll;
+                    
+                    // Afficher la zone de chargement si on scroll assez
+                    if (extraScroll > 50 && LoadingArea != null && !isLoadingAreaVisible)
+                    {
+                        LoadingArea.Visibility = Visibility.Visible;
+                        isLoadingAreaVisible = true;
+                    }
+                }
+                else
+                {
+                    newOffset = Math.Min(newOffset, maxOffset);
+                }
 
                 MainScrollViewer.ScrollToVerticalOffset(newOffset);
             }
@@ -601,13 +855,23 @@ namespace AnimeScrollApp
                 }
                 else if (scrollCounter == animeCount - 1 && canLoadMore && !isLoading)
                 {
-                    scrollCounter++;
-                    _ = LoadAnimesAsync(5, true);
+                    // Si on tire vers le bas au dernier anime, déclencher le chargement
+                    if (delta > 50)
+                    {
+                        _ = LoadAnimesAsync(8, true);
+                    }
                 }
             }
             else if (scrollRatio <= -0.5)
             {
                 scrollCounter = Math.Max(0, scrollCounter - 1);
+            }
+
+            // Si on a juste révélé la zone de chargement sans aller assez loin
+            if (isLoadingAreaVisible && !isLoading)
+            {
+                LoadingArea.Visibility = Visibility.Collapsed;
+                isLoadingAreaVisible = false;
             }
 
             scrollCounter = Math.Min(scrollCounter, Math.Max(0, animeCount - 1));

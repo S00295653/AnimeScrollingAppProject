@@ -7,16 +7,154 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         Background="Black">
+    <Window.Resources>
+        <!-- Couleur principale de l'identité visuelle -->
+        <SolidColorBrush x:Key="AccentColor" Color="#E94560"/>
+        
+        <!-- Style pour garder la taille appropriée -->
+        <Style TargetType="Window">
+            <Setter Property="MinHeight" Value="800"/>
+            <Setter Property="MinWidth" Value="450"/>
+        </Style>
+    </Window.Resources>
+    
     <Grid>
         <ScrollViewer x:Name="MainScrollViewer"
                       VerticalScrollBarVisibility="Hidden"
                       HorizontalScrollBarVisibility="Disabled"
                       PanningMode="None"
-                      PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
-            <StackPanel x:Name="AnimeContainer" MouseMove="AnimeContainer_MouseMove" MouseLeftButtonDown="AnimeContainer_MouseLeftButtonDown" MouseLeftButtonUp="AnimeContainer_MouseLeftButtonUp">
-                <!-- Les cartes d'anime seront ajoutées ici -->
+                      PreviewMouseWheel="ScrollViewer_PreviewMouseWheel"
+                      Focusable="False">
+            <StackPanel>
+                <StackPanel x:Name="AnimeContainer" 
+                           MouseMove="AnimeContainer_MouseMove" 
+                           MouseLeftButtonDown="AnimeContainer_MouseLeftButtonDown" 
+                           MouseLeftButtonUp="AnimeContainer_MouseLeftButtonUp">
+                    <!-- Les cartes d'anime seront ajoutées ici -->
+                </StackPanel>
+                
+                <!-- Zone de chargement à la fin -->
+                <Grid x:Name="LoadingArea"
+                      Height="300"
+                      Background="#E0000000"
+                      Visibility="Collapsed">
+                    <Border Background="#1A1A1A"
+                           CornerRadius="20"
+                           Margin="30,50,30,50"
+                           BorderBrush="{StaticResource AccentColor}"
+                           BorderThickness="2">
+                        <StackPanel VerticalAlignment="Center" 
+                                   HorizontalAlignment="Center"
+                                   Margin="30">
+                            
+                            <!-- Animation de chargement circulaire -->
+                            <Grid Width="60" Height="60" Margin="0,0,0,20">
+                                <Ellipse Width="60" Height="60"
+                                        Stroke="{StaticResource AccentColor}"
+                                        StrokeThickness="3"
+                                        Opacity="0.2"/>
+                                
+                                <Ellipse x:Name="LoadingCircle"
+                                        Width="60" Height="60"
+                                        Stroke="{StaticResource AccentColor}"
+                                        StrokeThickness="3"
+                                        StrokeDashArray="30,70"
+                                        StrokeDashOffset="0"
+                                        RenderTransformOrigin="0.5,0.5">
+                                    <Ellipse.RenderTransform>
+                                        <RotateTransform x:Name="SpinTransform" Angle="0"/>
+                                    </Ellipse.RenderTransform>
+                                    <Ellipse.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation 
+                                                        Storyboard.TargetName="SpinTransform"
+                                                        Storyboard.TargetProperty="Angle"
+                                                        From="0" To="360"
+                                                        Duration="0:0:1.5"
+                                                        RepeatBehavior="Forever"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                            </Grid>
+                            
+                            <!-- Texte de chargement -->
+                            <TextBlock Text="🔍 Recherche en cours..." 
+                                      FontSize="18" 
+                                      Foreground="White"
+                                      FontWeight="SemiBold"
+                                      HorizontalAlignment="Center"
+                                      TextAlignment="Center"
+                                      Margin="0,0,0,6"/>
+                            
+                            <TextBlock Text="Exploration de nouveaux animes sur AniList" 
+                                      FontSize="13" 
+                                      Foreground="#A0A0A0"
+                                      HorizontalAlignment="Center"
+                                      TextAlignment="Center"
+                                      TextWrapping="Wrap"
+                                      MaxWidth="300"
+                                      Margin="0,0,0,0"/>
+                            
+                            <!-- Indicateur visuel animé -->
+                            <StackPanel Orientation="Horizontal" 
+                                       HorizontalAlignment="Center"
+                                       Margin="0,12,0,0">
+                                <Ellipse x:Name="Dot1" Width="8" Height="8" Fill="{StaticResource AccentColor}" Margin="4">
+                                    <Ellipse.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard RepeatBehavior="Forever">
+                                                    <DoubleAnimation 
+                                                        Storyboard.TargetProperty="Opacity"
+                                                        From="0.3" To="1" Duration="0:0:0.6"
+                                                        AutoReverse="True"
+                                                        BeginTime="0:0:0"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Ellipse x:Name="Dot2" Width="8" Height="8" Fill="{StaticResource AccentColor}" Margin="4">
+                                    <Ellipse.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard RepeatBehavior="Forever">
+                                                    <DoubleAnimation 
+                                                        Storyboard.TargetProperty="Opacity"
+                                                        From="0.3" To="1" Duration="0:0:0.6"
+                                                        AutoReverse="True"
+                                                        BeginTime="0:0:0.2"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                                <Ellipse x:Name="Dot3" Width="8" Height="8" Fill="{StaticResource AccentColor}" Margin="4">
+                                    <Ellipse.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard RepeatBehavior="Forever">
+                                                    <DoubleAnimation 
+                                                        Storyboard.TargetProperty="Opacity"
+                                                        From="0.3" To="1" Duration="0:0:0.6"
+                                                        AutoReverse="True"
+                                                        BeginTime="0:0:0.4"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
+        
         <!-- Overlay avec contrôles -->
         <Grid VerticalAlignment="Top" HorizontalAlignment="Right" Margin="10">
             <StackPanel>
@@ -30,33 +168,40 @@
                         Foreground="White"
                         BorderThickness="0"
                         Cursor="Hand"
-                        Margin="0,0,0,10"/>
+                        Margin="0,0,0,10">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                               CornerRadius="20"
+                                               BorderThickness="0">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource AccentColor}"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                
                 <!-- Info utilisateur -->
                 <Border Background="#80000000" 
                         CornerRadius="20"
-                        Padding="10,5,10,5">
+                        Padding="12,6,12,6">
                     <TextBlock x:Name="AnimeCounter" 
                                Text="0 animes"
                                Foreground="White"
-                               FontSize="12"/>
+                               FontSize="12"
+                               FontWeight="SemiBold"/>
                 </Border>
             </StackPanel>
         </Grid>
-        <!-- Indicateur de chargement -->
-        <Border x:Name="LoadingIndicator"
-                Background="#CC000000"
-                Visibility="Collapsed">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <TextBlock Text="⏳" 
-                           FontSize="48" 
-                           HorizontalAlignment="Center"
-                           Foreground="White"/>
-                <TextBlock Text="Chargement..." 
-                           FontSize="18" 
-                           Foreground="White"
-                           HorizontalAlignment="Center"
-                           Margin="0,10,0,0"/>
-            </StackPanel>
-        </Border>
     </Grid>
 </Window>
